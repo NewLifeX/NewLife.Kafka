@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30128.74
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NewLife.Kafka", "NewLife.Kafka\NewLife.Kafka.csproj", "{4122164C-5F6E-418C-8B5E-241878C46B52}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test", "Test\Test.csproj", "{90ED90D7-4BF7-4FFC-A917-1BE612FF228C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4122164C-5F6E-418C-8B5E-241878C46B52}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4122164C-5F6E-418C-8B5E-241878C46B52}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4122164C-5F6E-418C-8B5E-241878C46B52}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4122164C-5F6E-418C-8B5E-241878C46B52}.Release|Any CPU.Build.0 = Release|Any CPU
+		{90ED90D7-4BF7-4FFC-A917-1BE612FF228C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{90ED90D7-4BF7-4FFC-A917-1BE612FF228C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{90ED90D7-4BF7-4FFC-A917-1BE612FF228C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{90ED90D7-4BF7-4FFC-A917-1BE612FF228C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9B014964-38CE-4F1B-9D25-0500977CC49B}
+	EndGlobalSection
+EndGlobal
