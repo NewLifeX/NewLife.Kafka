@@ -7,8 +7,8 @@
     <Description></Description>
     <Company>新生命开发团队</Company>
     <Copyright>版权所有(C) 新生命开发团队 2002~2020</Copyright>
-    <Version>1.0.2020.0604</Version>
-    <FileVersion>1.0.2020.0604</FileVersion>
+    <Version>1.0.2021.1204</Version>
+    <FileVersion>1.0.2021.1204</FileVersion>
     <AssemblyVersion>1.0.*</AssemblyVersion>
     <Deterministic>false</Deterministic>
     <OutputPath>..\Bin</OutputPath>
@@ -44,9 +44,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NewLife.Core" Version="8.10.2020.1101" />
+    <PackageReference Include="NewLife.Core" Version="8.11.2021.1204" />
     <PackageReference Include="Confluent.Kafka">
-      <Version>1.5.2</Version>
+      <Version>1.8.2</Version>
     </PackageReference>
   </ItemGroup>
 
