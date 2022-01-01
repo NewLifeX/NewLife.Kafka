@@ -1,14 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net45;netstandard2.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.1</TargetFrameworks>
     <AssemblyName>NewLife.Kafka</AssemblyName>
     <RootNamespace>NewLife.Kafka</RootNamespace>
     <AssemblyTitle>Kafka客户端</AssemblyTitle>
     <Description></Description>
     <Company>新生命开发团队</Company>
-    <Copyright>版权所有(C) 新生命开发团队 2002~2020</Copyright>
-    <Version>1.0.2021.1204</Version>
-    <FileVersion>1.0.2021.1204</FileVersion>
+    <Copyright>版权所有(C) 新生命开发团队 2002~2022</Copyright>
+    <Version>1.0.2022.0101</Version>
+    <FileVersion>1.0.2022.0101</FileVersion>
     <AssemblyVersion>1.0.*</AssemblyVersion>
     <Deterministic>false</Deterministic>
     <OutputPath>..\Bin</OutputPath>
@@ -44,7 +44,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NewLife.Core" Version="8.11.2021.1204" />
+    <PackageReference Include="NewLife.Core" Version="9.0.2022.101" />
     <PackageReference Include="Confluent.Kafka">
       <Version>1.8.2</Version>
     </PackageReference>
