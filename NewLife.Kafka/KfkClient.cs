@@ -1,80 +1,85 @@
 ﻿using Confluent.Kafka;
-using NewLife.Collections;
 using NewLife.Log;
+using NewLife.Serialization;
 using NewLife.Threading;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
-namespace NewLife.Kafka
+namespace NewLife.Kafka;
+
+/// <summary>消费客户端</summary>
+public class KfkClient : DisposeBase
 {
-    /// <summary>消费客户端</summary>
-    public class KfkClient : DisposeBase
+    #region 属性
+    /// <summary>是否使用中</summary>
+    public Boolean Active { get; private set; }
+
+    /// <summary>服务器集群地址</summary>
+    public String Servers { get; set; }
+
+    /// <summary>主题</summary>
+    public String Topic { get; set; }
+
+    /// <summary>消费者</summary>
+    public String GroupID { get; set; }
+
+    /// <summary>批大小。消费后整批处理，默认1000</summary>
+    public Int32 BatchSize { get; set; } = 1000;
+
+    /// <summary>消费者</summary>
+    public IConsumer<String, String> Consumer { get; set; }
+
+    ///// <summary>每次消费完成后自动提交偏移量</summary>
+    //public Boolean AutoCommited { get; set; } = true;
+
+    /// <summary>分区</summary>
+    protected IList<Int32> Partitions { get; } = new List<Int32>();
+
+    /// <summary>性能追踪</summary>
+    public ITracer Tracer { get; set; }
+    #endregion
+
+    #region 构造
+    /// <summary>销毁</summary>
+    /// <param name="disposing"></param>
+    protected override void Dispose(bool disposing)
     {
-        #region 属性
-        /// <summary>是否使用中</summary>
-        public Boolean Active { get; private set; }
+        base.Dispose(disposing);
 
-        /// <summary>消费者</summary>
-        public IConsumer<String, String> Consumer { get; set; }
+        Stop();
+    }
+    #endregion
 
-        /// <summary>主题</summary>
-        public String Topic { get; set; }
+    #region 开始停止
+    /// <summary>确保已创建</summary>
+    public virtual void EnsureCreate()
+    {
+        var csm = Consumer;
+        if (csm != null) return;
 
-        /// <summary>消费者</summary>
-        public String GroupID { get; set; }
+        if (Topic.IsNullOrEmpty()) throw new Exception($"消费主题不能为空！");
 
-        /// <summary>服务器集群地址</summary>
-        public String Servers { get; set; }
+        var setting = LoadSetting();
+        DefaultSpan.Current?.AppendTag(setting.ToJson());
 
-        /// <summary>批大小。消费后整批处理，默认1000</summary>
-        public Int32 BatchSize { get; set; } = 1000;
+        //csm = new Consumer(setting);
+        var builder = new ConsumerBuilder<String, String>(setting.ToDictionary(e => e.Key, e => e.Value + ""));
+        csm = builder.Build();
 
-        /// <summary>每次消费完成后自动提交偏移量</summary>
-        public Boolean AutoCommited { get; set; } = true;
+        //// 加载错误事件和消费错误事件处理函数
+        //csm.OnConsumeError += WriteLog;
+        //csm.OnError += WriteLog;
+        //csm.OnLog += WriteLog;
 
-        /// <summary>分区</summary>
-        protected IList<Int32> Partitions { get; } = new List<Int32>();
-        #endregion
+        Consumer = csm;
+    }
 
-        #region 构造
-        /// <summary>销毁</summary>
-        /// <param name="disposing"></param>
-        protected override void Dispose(bool disposing)
+    /// <summary>开始</summary>
+    public void Start()
+    {
+        if (Active) return;
+
+        using var span = Tracer?.NewSpan($"kafka:{Topic}:Start");
+        try
         {
-            base.Dispose(disposing);
-
-            Stop();
-        }
-        #endregion
-
-        #region 开始停止
-        /// <summary>确保已创建</summary>
-        public virtual void EnsureCreate()
-        {
-            var csm = Consumer;
-            if (csm != null) return;
-
-            if (Topic.IsNullOrEmpty()) throw new Exception($"消费主题不能为空！");
-
-            var setting = LoadSetting();
-            //csm = new Consumer(setting);
-            var builder = new ConsumerBuilder<String, String>(setting.ToDictionary(e => e.Key, e => e.Value + ""));
-            csm = builder.Build();
-
-            //// 加载错误事件和消费错误事件处理函数
-            //csm.OnConsumeError += WriteLog;
-            //csm.OnError += WriteLog;
-            //csm.OnLog += WriteLog;
-
-            Consumer = csm;
-        }
-
-        /// <summary>开始</summary>
-        public void Start()
-        {
-            if (Active) return;
-
             EnsureCreate();
 
             // 挂载消费主题
@@ -90,22 +95,27 @@ namespace NewLife.Kafka
                 Consumer.Subscribe(Topic);
             }
 
-            InitStat();
             _timer = new TimerX(DoConsume, null, 0, 1000) { Async = true };
 
             Active = true;
         }
-
-        /// <summary>停止</summary>
-        public void Stop()
+        catch (Exception ex)
         {
-            if (!Active) return;
+            span?.SetError(ex, null);
+            throw;
+        }
+    }
 
+    /// <summary>停止</summary>
+    public void Stop()
+    {
+        if (!Active) return;
+
+        using var span = Tracer?.NewSpan($"kafka:{Topic}:Stop");
+        try
+        {
             _timer.TryDispose();
             _timer = null;
-
-            _stTimer.TryDispose();
-            _stTimer = null;
 
             Consumer.Unassign();
             Consumer.Unsubscribe();
@@ -114,28 +124,35 @@ namespace NewLife.Kafka
 
             Active = false;
         }
-        #endregion
-
-        #region 消费
-        private TimerX _timer;
-
-        private void DoConsume(Object state)
+        catch (Exception ex)
         {
-            var list = new List<ConsumeResult<String, String>>();
+            span?.SetError(ex, null);
+            throw;
+        }
+    }
+    #endregion
 
-            // 多次拉取，批量处理
-            for (var i = 0; i < BatchSize; i++)
+    #region 消费
+    private TimerX _timer;
+
+    private void DoConsume(Object state)
+    {
+        var list = new List<ConsumeResult<String, String>>();
+
+        // 多次拉取，批量处理
+        for (var i = 0; i < BatchSize; i++)
+        {
+            var result = Consumer.Consume(10);
+            if (result != null)
             {
-                var result = Consumer.Consume(10);
-                if (result != null)
-                {
-                    list.Add(result);
-
-                    Stat.Increment(1, 0);
-                }
+                list.Add(result);
             }
+        }
 
-            if (list.Count > 0)
+        if (list.Count > 0)
+        {
+            using var span = Tracer?.NewSpan($"mq:{Topic}:Consume");
+            try
             {
                 // 批量处理
                 OnProcess(list.Select(e => e.Message).ToList());
@@ -146,93 +163,65 @@ namespace NewLife.Kafka
                 // 马上开始下一次
                 TimerX.Current.SetNext(-1);
             }
-        }
-
-        /// <summary>收到消息事件</summary>
-        public event EventHandler<IList<Message<String, String>>> OnMessage;
-
-        /// <summary>处理一批消息</summary>
-        /// <param name="messages"></param>
-        protected virtual void OnProcess(IList<Message<String, String>> messages) => OnMessage?.Invoke(this, messages);
-        #endregion
-
-        #region 统计
-        /// <summary>消费统计</summary>
-        public ICounter Stat { get; set; } = new PerfCounter();
-
-        /// <summary>显示统计信息的周期。默认60秒，0表示不显示统计信息</summary>
-        public Int32 StatPeriod { get; set; } = 60;
-
-        private TimerX _stTimer;
-        private void InitStat()
-        {
-            var p = StatPeriod * 1000;
-            _stTimer = new TimerX(ShowStat, null, p, p) { Async = true };
-        }
-
-        private String _Last;
-        private void ShowStat(Object stat)
-        {
-            var sb = Pool.StringBuilder.Get();
-            var pf = Stat;
-            if (pf != null && pf.Value > 0) sb.AppendFormat("消费：{0} ", pf);
-
-            var msg = sb.Put(true);
-            if (msg.IsNullOrEmpty() || msg == _Last) return;
-            _Last = msg;
-
-            XTrace.WriteLine(msg);
-        }
-        #endregion
-
-        #region 辅助
-        /// <summary>
-        /// 加载设置
-        /// </summary>
-        /// <returns></returns>
-        protected virtual Dictionary<String, Object> LoadSetting()
-        {
-            var cfg = KfkSetting.Current;
-
-            //// 从配置中心读取集群地址
-            //if (Servers.IsNullOrEmpty()) Servers = ConfigClient.Instance.Get("Kafka.Server");
-
-            var dic = new Dictionary<String, Object>
+            catch (Exception ex)
             {
-                { "group.id", GroupID },
-                { "bootstrap.servers", Servers },
-                { "enable.auto.commit", false },
-                { "auto.offset.reset",cfg.AutoReset}
-            };
+                span?.SetError(ex, null);
 
-            // 设置属性
-            if (cfg.MaxMessages >= 0) dic.Add("consume.callback.max.messages", cfg.MaxMessages);
-            if (cfg.FetchMaxBytes >= 0) dic.Add("fetch.max.bytes", cfg.FetchMaxBytes);
-            if (cfg.MaxMessageBytes >= 0) dic.Add("message.max.bytes", cfg.MaxMessageBytes);
-            if (cfg.QMaxMessagesKbytes >= 0) dic.Add("queued.max.messages.kbytes", cfg.QMaxMessagesKbytes);
-            if (cfg.StoreSyncInterval >= 0) dic.Add("offset.store.sync.interval.ms", cfg.StoreSyncInterval);
-            //if (cfg.AutoCommitInterval >= 0) dic.Add("auto.commit.interval.ms", cfg.AutoCommitInterval);
-            if (cfg.FetchWaitTime >= 0) dic.Add("fetch.wait.max.ms", cfg.FetchWaitTime);
-            if (cfg.RecMessageMaxBytes >= 0) dic.Add("receive.message.max.bytes", cfg.RecMessageMaxBytes);
-            if (cfg.FetchMessageMaxBytes >= 0) dic.Add("fetch.message.max.bytes", cfg.FetchMessageMaxBytes);
-
-            return dic;
+                throw;
+            }
         }
-
-        /// <summary>
-        /// 写日志
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        protected virtual void WriteLog(Object sender, Object e)
-        {
-            //if (e is Message<String, String> msg)
-            //    XTrace.Log.Error($"消费错误：{msg.Error} TopicPartitionOffset={msg.TopicPartitionOffset}");
-
-            if (e is Error msg2) XTrace.Log.Error(msg2.Reason);
-
-            if (e is LogMessage msg3) XTrace.WriteLine(msg3.Message);
-        }
-        #endregion
     }
+
+    /// <summary>收到消息事件</summary>
+    public event EventHandler<IList<Message<String, String>>> OnMessage;
+
+    /// <summary>处理一批消息</summary>
+    /// <param name="messages"></param>
+    protected virtual void OnProcess(IList<Message<String, String>> messages) => OnMessage?.Invoke(this, messages);
+    #endregion
+
+    #region 辅助
+    /// <summary>
+    /// 加载设置
+    /// </summary>
+    /// <returns></returns>
+    protected virtual Dictionary<String, Object> LoadSetting()
+    {
+        var cfg = KfkSetting.Current;
+
+        //// 从配置中心读取集群地址
+        //if (Servers.IsNullOrEmpty()) Servers = ConfigClient.Instance.Get("Kafka.Server");
+
+        var dic = new Dictionary<String, Object>
+        {
+            { "group.id", GroupID },
+            { "bootstrap.servers", Servers },
+            { "enable.auto.commit", false },
+            { "auto.offset.reset",cfg.AutoReset}
+        };
+
+        // 设置属性
+        if (cfg.MaxMessages >= 0) dic.Add("consume.callback.max.messages", cfg.MaxMessages);
+        if (cfg.FetchMaxBytes >= 0) dic.Add("fetch.max.bytes", cfg.FetchMaxBytes);
+        if (cfg.MaxMessageBytes >= 0) dic.Add("message.max.bytes", cfg.MaxMessageBytes);
+        if (cfg.QMaxMessagesKbytes >= 0) dic.Add("queued.max.messages.kbytes", cfg.QMaxMessagesKbytes);
+        if (cfg.StoreSyncInterval >= 0) dic.Add("offset.store.sync.interval.ms", cfg.StoreSyncInterval);
+        //if (cfg.AutoCommitInterval >= 0) dic.Add("auto.commit.interval.ms", cfg.AutoCommitInterval);
+        if (cfg.FetchWaitTime >= 0) dic.Add("fetch.wait.max.ms", cfg.FetchWaitTime);
+        if (cfg.RecMessageMaxBytes >= 0) dic.Add("receive.message.max.bytes", cfg.RecMessageMaxBytes);
+        if (cfg.FetchMessageMaxBytes >= 0) dic.Add("fetch.message.max.bytes", cfg.FetchMessageMaxBytes);
+
+        return dic;
+    }
+
+    /// <summary>日志</summary>
+    public ILog Log { get; set; } = Logger.Null;
+
+    /// <summary>
+    /// 写日志
+    /// </summary>
+    /// <param name="format"></param>
+    /// <param name="args"></param>
+    public virtual void WriteLog(String format, params Object[] args) => Log?.Info(format, args);
+    #endregion
 }
