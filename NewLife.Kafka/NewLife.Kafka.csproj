@@ -44,7 +44,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="NewLife.Core" Version="11.0.2024.1101" />
+    <PackageReference Include="NewLife.Core" Version="11.0.2024.1113" />
     <PackageReference Include="Confluent.Kafka">
       <Version>2.6.0</Version>
     </PackageReference>
